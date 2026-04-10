@@ -479,6 +479,38 @@ def api_export_docx():
                     mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     headers={"Content-Disposition":"attachment; filename=exam.docx"})
 
+@app.route("/api/export/pdf", methods=["POST"])
+def api_export_pdf():
+    """문제지 + 답지 마크다운 → 학원 스타일 PDF"""
+    try:
+        from exam_pdf import exam_md_to_pdf
+    except ImportError as e:
+        return jsonify({"error": f"exam_pdf 모듈 없음: {e}"}), 500
+
+    data       = request.get_json()
+    exam_md    = data.get("exam_md", "")
+    answer_md  = data.get("answer_md", "")
+    academy    = data.get("academy_name", "미래학원")
+    subject    = data.get("subject", "영어")
+    grade      = data.get("grade", "중등2")
+    scope      = data.get("scope", "")
+
+    if not exam_md:
+        return jsonify({"error": "문제지 내용 없음"}), 400
+
+    try:
+        pdf_bytes = exam_md_to_pdf(exam_md, answer_md, academy, subject, grade, scope)
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "detail": traceback.format_exc()}), 500
+
+    from urllib.parse import quote
+    fname_utf8 = f"{grade}_{subject}_exam.pdf"
+    cd = f"attachment; filename=\"exam.pdf\"; filename*=UTF-8''{quote(fname_utf8)}"
+    return Response(pdf_bytes,
+                    mimetype="application/pdf",
+                    headers={"Content-Disposition": cd})
+
 @app.route("/api/files")
 def api_files():
     files = sorted(OUTPUT_DIR.glob("*.md"), key=lambda f: f.stat().st_mtime, reverse=True)
@@ -653,6 +685,8 @@ textarea:focus{border-color:var(--accent)}
 .btn-s:hover{background:var(--hover)}
 .btn-blue{background:var(--accent2);color:#fff;border-color:var(--accent2)}
 .btn-blue:hover{filter:brightness(1.1)}
+.btn-pdf{background:#c0392b;color:#fff;border-color:#c0392b}
+.btn-pdf:hover{filter:brightness(1.1)}
 
 /* 결과 패널 */
 .prog-list{display:flex;flex-direction:column;gap:5px;margin-bottom:16px}
@@ -974,6 +1008,7 @@ textarea:focus{border-color:var(--accent)}
   <button class="btn-s"   onclick="clearAll()">🗑 초기화</button>
   <button class="btn-s btn-blue" id="btn-edit" style="display:none" onclick="openEdit()">✏️ 편집·인쇄</button>
   <button class="btn-s"   id="btn-docx" style="display:none" onclick="dlDocx()">📄 DOCX</button>
+  <button class="btn-s btn-pdf" id="btn-pdf"  style="display:none" onclick="dlPdf()">🖨️ PDF 인쇄용</button>
 </div>
 </div><!-- /right -->
 </div><!-- /body -->
@@ -1370,6 +1405,7 @@ async function doGenerate(){
   document.getElementById('btn-gen').disabled=true;
   document.getElementById('btn-edit').style.display='none';
   document.getElementById('btn-docx').style.display='none';
+  document.getElementById('btn-pdf').style.display='none';
   examMd=''; answerMd=''; examFile=''; answerFile=''; lastMd=''; lastFile='';
 
   const body={engine_group:selEng,engine_model:selMdl,api_key:apiKey,
@@ -1406,6 +1442,7 @@ async function doGenerate(){
            <div class="md-view">${marked.parse(examMd)}</div>`;
         document.getElementById('btn-edit').style.display='';
         document.getElementById('btn-docx').style.display='';
+        document.getElementById('btn-pdf').style.display='';
       }
       if(ev==='error'){
         const msg=(d.msg||'').replace(/\n/g,'<br>');
@@ -1466,6 +1503,7 @@ async function openFile(name, isAnswer=false){
     warn+`<div class="md-view">${marked.parse(text)}</div>`;
   document.getElementById('btn-edit').style.display='';
   document.getElementById('btn-docx').style.display='';
+        document.getElementById('btn-pdf').style.display='';
 }
 
 // ── 편집 모달
@@ -1529,6 +1567,38 @@ async function downloadDocx(md){
   a.href=URL.createObjectURL(blob);
   a.download=(lastFile||'exam').replace('.md','')+'.docx';
   a.click();
+}
+
+// ── PDF 인쇄용 다운로드
+async function dlPdf(){
+  if(!examMd){alert('먼저 문제를 생성하세요.');return;}
+  const academy=document.getElementById('academy-name').value.trim()||'미래학원';
+  const subject=document.getElementById('subject').value||'영어';
+  const grade  =document.getElementById('grade').value||'중등2';
+  const scope  =document.getElementById('scope').value||'';
+  const btn=document.getElementById('btn-pdf');
+  btn.textContent='⏳ PDF 생성중...'; btn.disabled=true;
+  try{
+    const r=await fetch('/api/export/pdf',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        exam_md:examMd, answer_md:answerMd,
+        academy_name:academy, subject, grade, scope
+      })});
+    if(!r.ok){
+      const err=await r.json().catch(()=>({error:'알 수 없는 오류'}));
+      alert('PDF 생성 실패: '+err.error); return;
+    }
+    const blob=await r.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${grade}_${subject}_exam.pdf`;
+    a.click();
+  }catch(e){
+    alert('PDF 오류: '+e.message);
+  }finally{
+    btn.textContent='🖨️ PDF 인쇄용'; btn.disabled=false;
+  }
 }
 
 // ── 초기화
