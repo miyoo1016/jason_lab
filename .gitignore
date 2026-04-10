@@ -1,0 +1,27 @@
+# API 키 (절대 올리면 안됨)
+config.json
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# 생성된 시험지 (용량 큰 결과물)
+generated_exams/
+
+# 업로드 임시 파일
+uploads/
+
+# Mac 시스템 파일
+.DS_Store
+
+# 로그/임시
+*.log
+*.txt
+local_*.json
+extraction_results.txt
+passage_context.txt
+antigravity.config.json
+
+# 민감한 PDF (개인 문서)
+*.pdf
