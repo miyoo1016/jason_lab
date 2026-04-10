@@ -265,12 +265,12 @@ def make_styles(inner_w_mm: float = None):
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
-    s["q_num"]    = ps("q_num",   fontName=FONT_BOLD, fontSize=9.5, leading=14, textColor=C_DARK)
+    s["q_num"]    = ps("q_num",   fontName=FONT_BOLD, fontSize=11, leading=16, textColor=C_DARK)
     s["q_type"]   = ps("q_type",  fontName=FONT_BOLD, fontSize=7.5, leading=11, textColor=colors.white, alignment=TA_RIGHT)
-    s["q_stem"]   = ps("q_stem",  fontSize=9, leading=13, textColor=C_DARK)
-    s["choice"]   = ps("choice",  fontSize=8.5, leading=13, textColor=C_DARK, leftIndent=4)
-    s["passage"]  = ps("passage", fontSize=8, leading=12, textColor=C_DARK)
-    s["ans_blank"]= ps("ans_blank", fontName=FONT_BOLD, fontSize=8.5, leading=12,
+    s["q_stem"]   = ps("q_stem",  fontSize=10.5, leading=16, textColor=C_DARK, spaceAfter=2)
+    s["choice"]   = ps("choice",  fontSize=10.5, leading=17, textColor=C_DARK, leftIndent=6, spaceAfter=1)
+    s["passage"]  = ps("passage", fontSize=9.5, leading=15, textColor=C_DARK)
+    s["ans_blank"]= ps("ans_blank", fontName=FONT_BOLD, fontSize=9.5, leading=14,
                         textColor=C_DARK, alignment=TA_RIGHT)
     s["section"]  = ps("section", fontName=FONT_BOLD, fontSize=9.5, leading=14,
                         textColor=colors.white)
@@ -413,7 +413,7 @@ def _section_bar(title: str, desc: str, inner_w_pt: float, color) -> list:
         ("TOPPADDING",   (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
     ]))
-    return [tbl, Spacer(1, 2 * mm)]
+    return [tbl, Spacer(1, 4 * mm)]
 
 
 # ── 객관식 렌더링 ─────────────────────────────────────
@@ -421,31 +421,19 @@ def _render_mc(q: Question, inner_w_pt: float, ST: dict) -> list:
     items = []
     stem, passage = _split_body(q.body)
 
-    # 헤더 행: 번호(왼쪽) + 유형태그(오른쪽)
-    tag_bg = BLUE
-    tag_cell = Table(
-        [[Paragraph("객관식", ParagraphStyle("tag", fontName=FONT_BOLD, fontSize=6.5,
-                                            textColor=colors.white, leading=10, alignment=TA_CENTER))]],
-        colWidths=[14 * mm], rowHeights=[5 * mm],
-    )
-    tag_cell.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), tag_bg),
-        ("ROUNDEDCORNERS", (0, 0), (0, 0), [2, 2, 2, 2]),
-        ("TOPPADDING",    (0, 0), (0, 0), 0),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 0),
-        ("LEFTPADDING",   (0, 0), (0, 0), 2),
-        ("RIGHTPADDING",  (0, 0), (0, 0), 2),
-    ]))
-
+    # 헤더 행: 번호(왼쪽) + 화살표 태그(오른쪽)
+    tag_ps = ParagraphStyle("tag_mc", fontName=FONT_BOLD, fontSize=8,
+                            textColor=BLUE, leading=12, alignment=TA_RIGHT)
     num_para = Paragraph(f"<b>{q.num}.</b>", ST["q_num"])
+    tag_para = Paragraph("▶ 객관식", tag_ps)
     hdr_tbl = Table(
-        [[num_para, tag_cell]],
-        colWidths=[inner_w_pt - 16 * mm, 16 * mm],
+        [[num_para, tag_para]],
+        colWidths=[inner_w_pt * 0.65, inner_w_pt * 0.35],
     )
     hdr_tbl.setStyle(TableStyle([
         ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING",   (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
         ("LEFTPADDING",  (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
@@ -463,10 +451,10 @@ def _render_mc(q: Question, inner_w_pt: float, ST: dict) -> list:
         p_box.setStyle(TableStyle([
             ("BACKGROUND",   (0, 0), (0, 0), PBG),
             ("BOX",          (0, 0), (0, 0), 0.4, colors.HexColor("#cccccc")),
-            ("TOPPADDING",   (0, 0), (0, 0), 5),
-            ("BOTTOMPADDING",(0, 0), (0, 0), 5),
-            ("LEFTPADDING",  (0, 0), (0, 0), 6),
-            ("RIGHTPADDING", (0, 0), (0, 0), 6),
+            ("TOPPADDING",   (0, 0), (0, 0), 8),
+            ("BOTTOMPADDING",(0, 0), (0, 0), 8),
+            ("LEFTPADDING",  (0, 0), (0, 0), 8),
+            ("RIGHTPADDING", (0, 0), (0, 0), 8),
         ]))
         items.append(p_box)
         items.append(Spacer(1, 2 * mm))
@@ -488,7 +476,7 @@ def _render_mc(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("RIGHTPADDING",  (0, 0), (0, 0), 0),
     ]))
     items.append(ans_tbl)
-    items.append(Spacer(1, 7 * mm))
+    items.append(Spacer(1, 10 * mm))
 
     return [KeepTogether(items)]
 
@@ -498,30 +486,19 @@ def _render_sa(q: Question, inner_w_pt: float, ST: dict) -> list:
     items = []
     stem, passage = _split_body(q.body)
 
-    # 헤더 행
-    tag_cell = Table(
-        [[Paragraph("주관식", ParagraphStyle("tag2", fontName=FONT_BOLD, fontSize=6.5,
-                                            textColor=colors.white, leading=10, alignment=TA_CENTER))]],
-        colWidths=[14 * mm], rowHeights=[5 * mm],
-    )
-    tag_cell.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), GREEN),
-        ("ROUNDEDCORNERS", (0, 0), (0, 0), [2, 2, 2, 2]),
-        ("TOPPADDING",    (0, 0), (0, 0), 0),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 0),
-        ("LEFTPADDING",   (0, 0), (0, 0), 2),
-        ("RIGHTPADDING",  (0, 0), (0, 0), 2),
-    ]))
-
+    # 헤더 행: 번호 + 화살표 태그
+    tag_ps = ParagraphStyle("tag_sa", fontName=FONT_BOLD, fontSize=8,
+                            textColor=GREEN, leading=12, alignment=TA_RIGHT)
     num_para = Paragraph(f"<b>{q.num}.</b>", ST["q_num"])
+    tag_para = Paragraph("▶ 주관식", tag_ps)
     hdr_tbl = Table(
-        [[num_para, tag_cell]],
-        colWidths=[inner_w_pt - 16 * mm, 16 * mm],
+        [[num_para, tag_para]],
+        colWidths=[inner_w_pt * 0.65, inner_w_pt * 0.35],
     )
     hdr_tbl.setStyle(TableStyle([
         ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING",   (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
         ("LEFTPADDING",  (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
@@ -537,10 +514,10 @@ def _render_sa(q: Question, inner_w_pt: float, ST: dict) -> list:
         p_box.setStyle(TableStyle([
             ("BACKGROUND",   (0, 0), (0, 0), PBG),
             ("BOX",          (0, 0), (0, 0), 0.4, colors.HexColor("#cccccc")),
-            ("TOPPADDING",   (0, 0), (0, 0), 5),
-            ("BOTTOMPADDING",(0, 0), (0, 0), 5),
-            ("LEFTPADDING",  (0, 0), (0, 0), 6),
-            ("RIGHTPADDING", (0, 0), (0, 0), 6),
+            ("TOPPADDING",   (0, 0), (0, 0), 8),
+            ("BOTTOMPADDING",(0, 0), (0, 0), 8),
+            ("LEFTPADDING",  (0, 0), (0, 0), 8),
+            ("RIGHTPADDING", (0, 0), (0, 0), 8),
         ]))
         items.append(p_box)
         items.append(Spacer(1, 2 * mm))
@@ -565,7 +542,7 @@ def _render_sa(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("FONTSIZE",      (0, 0), (-1, -1), 8.5),
     ]))
     items.append(write_area)
-    items.append(Spacer(1, 7 * mm))
+    items.append(Spacer(1, 10 * mm))
 
     return [KeepTogether(items)]
 
@@ -575,30 +552,19 @@ def _render_es(q: Question, inner_w_pt: float, ST: dict) -> list:
     items = []
     stem, passage = _split_body(q.body)
 
-    # 헤더 행
-    tag_cell = Table(
-        [[Paragraph("서술형", ParagraphStyle("tag3", fontName=FONT_BOLD, fontSize=6.5,
-                                            textColor=colors.white, leading=10, alignment=TA_CENTER))]],
-        colWidths=[14 * mm], rowHeights=[5 * mm],
-    )
-    tag_cell.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), ORANGE),
-        ("ROUNDEDCORNERS", (0, 0), (0, 0), [2, 2, 2, 2]),
-        ("TOPPADDING",    (0, 0), (0, 0), 0),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 0),
-        ("LEFTPADDING",   (0, 0), (0, 0), 2),
-        ("RIGHTPADDING",  (0, 0), (0, 0), 2),
-    ]))
-
+    # 헤더 행: 번호 + 화살표 태그
+    tag_ps = ParagraphStyle("tag_es", fontName=FONT_BOLD, fontSize=8,
+                            textColor=ORANGE, leading=12, alignment=TA_RIGHT)
     num_para = Paragraph(f"<b>{q.num}.</b>", ST["q_num"])
+    tag_para = Paragraph("▶ 서술형", tag_ps)
     hdr_tbl = Table(
-        [[num_para, tag_cell]],
-        colWidths=[inner_w_pt - 16 * mm, 16 * mm],
+        [[num_para, tag_para]],
+        colWidths=[inner_w_pt * 0.65, inner_w_pt * 0.35],
     )
     hdr_tbl.setStyle(TableStyle([
         ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING",   (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
         ("LEFTPADDING",  (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
@@ -614,10 +580,10 @@ def _render_es(q: Question, inner_w_pt: float, ST: dict) -> list:
         p_box.setStyle(TableStyle([
             ("BACKGROUND",   (0, 0), (0, 0), PBG),
             ("BOX",          (0, 0), (0, 0), 0.4, colors.HexColor("#cccccc")),
-            ("TOPPADDING",   (0, 0), (0, 0), 5),
-            ("BOTTOMPADDING",(0, 0), (0, 0), 5),
-            ("LEFTPADDING",  (0, 0), (0, 0), 6),
-            ("RIGHTPADDING", (0, 0), (0, 0), 6),
+            ("TOPPADDING",   (0, 0), (0, 0), 8),
+            ("BOTTOMPADDING",(0, 0), (0, 0), 8),
+            ("LEFTPADDING",  (0, 0), (0, 0), 8),
+            ("RIGHTPADDING", (0, 0), (0, 0), 8),
         ]))
         items.append(p_box)
         items.append(Spacer(1, 2 * mm))
@@ -657,7 +623,7 @@ def _render_es(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("RIGHTPADDING", (0, 0), (0, 0), 0),
     ]))
     items.append(write_area)
-    items.append(Spacer(1, 7 * mm))
+    items.append(Spacer(1, 10 * mm))
 
     return [KeepTogether(items)]
 
