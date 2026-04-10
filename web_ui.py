@@ -1036,7 +1036,7 @@ textarea:focus{border-color:var(--accent)}
   </div>
   <div class="modal-ft">
     <span class="info" id="modal-info"></span>
-    <button class="btn-s btn-blue" onclick="printModal()">🖨 인쇄 (PDF 저장 가능)</button>
+    <button class="btn-s btn-pdf" onclick="dlPdfFromModal()" style="font-weight:700">🖨️ PDF 다운로드 (2단 시험지)</button>
     <button class="btn-s" onclick="dlDocxFromModal()">📄 DOCX 다운로드</button>
     <button class="btn-s" onclick="applyEdit()">✅ 적용 후 닫기</button>
   </div>
@@ -1553,6 +1553,30 @@ function printModal(){
 async function dlDocxFromModal(){
   const txt=document.getElementById('edit-ta').value;
   await downloadDocx(txt);
+}
+
+// ── 모달에서 PDF 다운로드 (2단 시험지)
+async function dlPdfFromModal(){
+  if(!examMd){alert('문제지 내용이 없습니다. 먼저 문제를 생성하세요.');return;}
+  const academy=document.getElementById('academy-name').value.trim()||'미래학원';
+  const subject=document.getElementById('subject').value||'영어';
+  const grade  =document.getElementById('grade').value||'중등2';
+  const scope  =document.getElementById('scope').value||'';
+  const btn=event.target;
+  btn.textContent='⏳ PDF 생성중...'; btn.disabled=true;
+  try{
+    const r=await fetch('/api/export/pdf',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({exam_md:examMd,answer_md:answerMd,
+        academy_name:academy,subject,grade,scope})});
+    if(!r.ok){const e=await r.json().catch(()=>({error:'오류'}));alert('PDF 실패: '+e.error);return;}
+    const blob=await r.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${grade}_${subject}_exam.pdf`;
+    a.click();
+  }catch(e){alert('PDF 오류: '+e.message);}
+  finally{btn.textContent='🖨️ PDF 다운로드 (2단 시험지)';btn.disabled=false;}
 }
 
 // ── DOCX 다운로드
