@@ -1559,8 +1559,8 @@ async function dlDocxFromModal(){
 async function dlPdfFromModal(){
   if(!examMd){alert('문제지 내용이 없습니다. 먼저 문제를 생성하세요.');return;}
   const academy=document.getElementById('academy-name').value.trim()||'미래학원';
-  const subject=document.getElementById('subject').value||'영어';
-  const grade  =document.getElementById('grade').value||'중등2';
+  const subject=selSubj||'영어';
+  const grade  =selGrade||'중등2';
   const scope  =document.getElementById('scope').value||'';
   const btn=event.target;
   btn.textContent='⏳ PDF 생성중...'; btn.disabled=true;
@@ -1597,8 +1597,8 @@ async function downloadDocx(md){
 async function dlPdf(){
   if(!examMd){alert('먼저 문제를 생성하세요.');return;}
   const academy=document.getElementById('academy-name').value.trim()||'미래학원';
-  const subject=document.getElementById('subject').value||'영어';
-  const grade  =document.getElementById('grade').value||'중등2';
+  const subject=selSubj||'영어';
+  const grade  =selGrade||'중등2';
   const scope  =document.getElementById('scope').value||'';
   const btn=document.getElementById('btn-pdf');
   btn.textContent='⏳ PDF 생성중...'; btn.disabled=true;
