@@ -120,6 +120,22 @@ def esc(text: str) -> str:
     return text
 
 
+def _clean_body(text: str) -> str:
+    """AI가 생성한 마크다운 찌꺼기 제거"""
+    if not text:
+        return text
+    lines = text.split(' ')
+    cleaned = []
+    skip_tokens = ('---', '##', '(답)', '(해설)', '★', '📄', '**')
+    for tok in lines:
+        if any(tok.startswith(s) for s in skip_tokens):
+            continue
+        # 인라인 bold/italic 마크다운 제거
+        tok = re.sub(r'\*+([^*]*)\*+', r'\1', tok)
+        cleaned.append(tok)
+    return ' '.join(cleaned).strip()
+
+
 def _split_body(body: str):
     """
     문제 본문에서 줄기(stem)와 지문(passage)을 분리.
@@ -131,6 +147,9 @@ def _split_body(body: str):
     if m:
         stem = m.group(1).strip()
         rest = m.group(2).strip()
+        # 지문이 너무 길면 분리하지 않음 (AI 찌꺼기 텍스트 방지)
+        if len(rest) > 800:
+            return body, ""
         ascii_ratio = sum(1 for c in rest if ord(c) < 128) / max(len(rest), 1)
         if ascii_ratio > 0.35:
             return stem, rest
@@ -226,7 +245,8 @@ def parse_questions(exam_md: str, answer_md: str) -> List[Question]:
                 body = line[3:].strip()
                 in_body = True
             elif in_body and line and not line.startswith(
-                    ("①", "②", "③", "④", "⑤", "정답:", "해설:", "답:", "모범", "채점", "[조건]", "- 조건")):
+                    ("①", "②", "③", "④", "⑤", "정답:", "해설:", "답:", "모범", "채점", "[조건]", "- 조건",
+                     "---", "##", "(답)", "(해설)", "★")):
                 if not re.match(r'^[①②③④⑤]', line):
                     body += " " + line
             elif re.match(r'^[①②③④⑤]', line):
@@ -418,8 +438,8 @@ def _section_bar(title: str, desc: str, inner_w_pt: float, color) -> list:
 
 # ── 객관식 렌더링 ─────────────────────────────────────
 def _render_mc(q: Question, inner_w_pt: float, ST: dict) -> list:
-    items = []
-    stem, passage = _split_body(q.body)
+    body = _clean_body(q.body)
+    stem, passage = _split_body(body)
 
     # 헤더 행: 번호(왼쪽) + 화살표 태그(오른쪽)
     tag_ps = ParagraphStyle("tag_mc", fontName=FONT_BOLD, fontSize=8,
@@ -437,34 +457,32 @@ def _render_mc(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("LEFTPADDING",  (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
-    items.append(hdr_tbl)
 
-    # 문제 줄기
+    # 번호 + 줄기는 함께 유지 (KeepTogether)
+    keep_items = [hdr_tbl]
     if stem:
-        items.append(Paragraph(esc(stem), ST["q_stem"]))
+        keep_items.append(Paragraph(esc(stem), ST["q_stem"]))
+    result = [KeepTogether(keep_items)]
 
-    # 지문 박스
+    # 지문 박스 (Paragraph로 자연스럽게 흐름 — Table 불가 크기 방지)
     if passage:
-        items.append(Spacer(1, 2 * mm))
-        passage_para = Paragraph(esc(passage), ST["passage"])
-        p_box = Table([[passage_para]], colWidths=[inner_w_pt])
-        p_box.setStyle(TableStyle([
-            ("BACKGROUND",   (0, 0), (0, 0), PBG),
-            ("BOX",          (0, 0), (0, 0), 0.4, colors.HexColor("#cccccc")),
-            ("TOPPADDING",   (0, 0), (0, 0), 8),
-            ("BOTTOMPADDING",(0, 0), (0, 0), 8),
-            ("LEFTPADDING",  (0, 0), (0, 0), 8),
-            ("RIGHTPADDING", (0, 0), (0, 0), 8),
-        ]))
-        items.append(p_box)
-        items.append(Spacer(1, 2 * mm))
+        result.append(Spacer(1, 2 * mm))
+        passage_ps = ParagraphStyle("passage_box", fontName=FONT, fontSize=9.5, leading=15,
+                                    textColor=C_DARK, backColor=PBG,
+                                    leftIndent=8, rightIndent=8,
+                                    spaceBefore=4, spaceAfter=4,
+                                    borderPad=6, borderWidth=0.4,
+                                    borderColor=colors.HexColor("#cccccc"),
+                                    borderRadius=0)
+        result.append(Paragraph(esc(passage), passage_ps))
+        result.append(Spacer(1, 2 * mm))
 
     # 선지 — 한 줄에 하나씩
     for ch in q.choices:
-        items.append(Paragraph(esc(ch), ST["choice"]))
+        result.append(Paragraph(esc(ch), ST["choice"]))
 
     # 정답 빈칸 (오른쪽 정렬)
-    items.append(Spacer(1, 1 * mm))
+    result.append(Spacer(1, 1 * mm))
     ans_tbl = Table(
         [[Paragraph("정답: (       )", ST["ans_blank"])]],
         colWidths=[inner_w_pt],
@@ -475,16 +493,16 @@ def _render_mc(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("LEFTPADDING",   (0, 0), (0, 0), 0),
         ("RIGHTPADDING",  (0, 0), (0, 0), 0),
     ]))
-    items.append(ans_tbl)
-    items.append(Spacer(1, 10 * mm))
+    result.append(ans_tbl)
+    result.append(Spacer(1, 10 * mm))
 
-    return [KeepTogether(items)]
+    return result
 
 
 # ── 주관식 렌더링 ─────────────────────────────────────
 def _render_sa(q: Question, inner_w_pt: float, ST: dict) -> list:
-    items = []
-    stem, passage = _split_body(q.body)
+    body = _clean_body(q.body)
+    stem, passage = _split_body(body)
 
     # 헤더 행: 번호 + 화살표 태그
     tag_ps = ParagraphStyle("tag_sa", fontName=FONT_BOLD, fontSize=8,
@@ -502,28 +520,26 @@ def _render_sa(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("LEFTPADDING",  (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
-    items.append(hdr_tbl)
 
+    keep_items = [hdr_tbl]
     if stem:
-        items.append(Paragraph(esc(stem), ST["q_stem"]))
+        keep_items.append(Paragraph(esc(stem), ST["q_stem"]))
+    result = [KeepTogether(keep_items)]
 
     if passage:
-        items.append(Spacer(1, 2 * mm))
-        passage_para = Paragraph(esc(passage), ST["passage"])
-        p_box = Table([[passage_para]], colWidths=[inner_w_pt])
-        p_box.setStyle(TableStyle([
-            ("BACKGROUND",   (0, 0), (0, 0), PBG),
-            ("BOX",          (0, 0), (0, 0), 0.4, colors.HexColor("#cccccc")),
-            ("TOPPADDING",   (0, 0), (0, 0), 8),
-            ("BOTTOMPADDING",(0, 0), (0, 0), 8),
-            ("LEFTPADDING",  (0, 0), (0, 0), 8),
-            ("RIGHTPADDING", (0, 0), (0, 0), 8),
-        ]))
-        items.append(p_box)
-        items.append(Spacer(1, 2 * mm))
+        result.append(Spacer(1, 2 * mm))
+        passage_ps = ParagraphStyle("passage_box_sa", fontName=FONT, fontSize=9.5, leading=15,
+                                    textColor=C_DARK, backColor=PBG,
+                                    leftIndent=8, rightIndent=8,
+                                    spaceBefore=4, spaceAfter=4,
+                                    borderPad=6, borderWidth=0.4,
+                                    borderColor=colors.HexColor("#cccccc"),
+                                    borderRadius=0)
+        result.append(Paragraph(esc(passage), passage_ps))
+        result.append(Spacer(1, 2 * mm))
 
     # 답 쓰는 칸
-    items.append(Spacer(1, 1 * mm))
+    result.append(Spacer(1, 1 * mm))
     ans_line_style = ParagraphStyle("al", fontName=FONT, fontSize=8.5, leading=12, textColor=C_DARK)
     write_area = Table(
         [[Paragraph("답:", ans_line_style), ""]],
@@ -541,16 +557,16 @@ def _render_sa(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("FONTNAME",      (0, 0), (-1, -1), FONT),
         ("FONTSIZE",      (0, 0), (-1, -1), 8.5),
     ]))
-    items.append(write_area)
-    items.append(Spacer(1, 10 * mm))
+    result.append(write_area)
+    result.append(Spacer(1, 10 * mm))
 
-    return [KeepTogether(items)]
+    return result
 
 
 # ── 서술형 렌더링 ─────────────────────────────────────
 def _render_es(q: Question, inner_w_pt: float, ST: dict) -> list:
-    items = []
-    stem, passage = _split_body(q.body)
+    body = _clean_body(q.body)
+    stem, passage = _split_body(body)
 
     # 헤더 행: 번호 + 화살표 태그
     tag_ps = ParagraphStyle("tag_es", fontName=FONT_BOLD, fontSize=8,
@@ -568,25 +584,23 @@ def _render_es(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("LEFTPADDING",  (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
-    items.append(hdr_tbl)
 
+    keep_items = [hdr_tbl]
     if stem:
-        items.append(Paragraph(esc(stem), ST["q_stem"]))
+        keep_items.append(Paragraph(esc(stem), ST["q_stem"]))
+    result = [KeepTogether(keep_items)]
 
     if passage:
-        items.append(Spacer(1, 2 * mm))
-        passage_para = Paragraph(esc(passage), ST["passage"])
-        p_box = Table([[passage_para]], colWidths=[inner_w_pt])
-        p_box.setStyle(TableStyle([
-            ("BACKGROUND",   (0, 0), (0, 0), PBG),
-            ("BOX",          (0, 0), (0, 0), 0.4, colors.HexColor("#cccccc")),
-            ("TOPPADDING",   (0, 0), (0, 0), 8),
-            ("BOTTOMPADDING",(0, 0), (0, 0), 8),
-            ("LEFTPADDING",  (0, 0), (0, 0), 8),
-            ("RIGHTPADDING", (0, 0), (0, 0), 8),
-        ]))
-        items.append(p_box)
-        items.append(Spacer(1, 2 * mm))
+        result.append(Spacer(1, 2 * mm))
+        passage_ps = ParagraphStyle("passage_box_es", fontName=FONT, fontSize=9.5, leading=15,
+                                    textColor=C_DARK, backColor=PBG,
+                                    leftIndent=8, rightIndent=8,
+                                    spaceBefore=4, spaceAfter=4,
+                                    borderPad=6, borderWidth=0.4,
+                                    borderColor=colors.HexColor("#cccccc"),
+                                    borderRadius=0)
+        result.append(Paragraph(esc(passage), passage_ps))
+        result.append(Spacer(1, 2 * mm))
 
     # 조건 박스
     if q.conditions:
@@ -605,8 +619,8 @@ def _render_es(q: Question, inner_w_pt: float, ST: dict) -> list:
             ("LEFTPADDING", (0, 0), (0, 0), 6),
             ("RIGHTPADDING",(0, 0), (0, 0), 6),
         ]))
-        items.append(cond_box)
-        items.append(Spacer(1, 2 * mm))
+        result.append(cond_box)
+        result.append(Spacer(1, 2 * mm))
 
     # 답 쓰는 넓은 영역
     write_area = Table(
@@ -622,10 +636,10 @@ def _render_es(q: Question, inner_w_pt: float, ST: dict) -> list:
         ("LEFTPADDING",  (0, 0), (0, 0), 0),
         ("RIGHTPADDING", (0, 0), (0, 0), 0),
     ]))
-    items.append(write_area)
-    items.append(Spacer(1, 10 * mm))
+    result.append(write_area)
+    result.append(Spacer(1, 10 * mm))
 
-    return [KeepTogether(items)]
+    return result
 
 
 # ── 정답 요약 표 ──────────────────────────────────────
